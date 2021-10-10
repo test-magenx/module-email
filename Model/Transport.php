@@ -8,7 +8,6 @@ declare(strict_types=1);
 namespace Magento\Email\Model;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
-use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Exception\MailException;
 use Magento\Framework\Mail\MessageInterface;
 use Magento\Framework\Mail\TransportInterface;
@@ -16,7 +15,6 @@ use Magento\Framework\Phrase;
 use Magento\Store\Model\ScopeInterface;
 use Laminas\Mail\Message;
 use Laminas\Mail\Transport\Sendmail;
-use Psr\Log\LoggerInterface;
 
 /**
  * Class that responsible for filling some message data before transporting it.
@@ -63,21 +61,14 @@ class Transport implements TransportInterface
     private $message;
 
     /**
-     * @var LoggerInterface|null
-     */
-    private $logger;
-
-    /**
      * @param MessageInterface $message Email message object
      * @param ScopeConfigInterface $scopeConfig Core store config
      * @param null|string|array|\Traversable $parameters Config options for sendmail parameters
-     * @param LoggerInterface|null $logger
      */
     public function __construct(
         MessageInterface $message,
         ScopeConfigInterface $scopeConfig,
-        $parameters = null,
-        LoggerInterface $logger = null
+        $parameters = null
     ) {
         $this->isSetReturnPath = (int) $scopeConfig->getValue(
             self::XML_PATH_SENDING_SET_RETURN_PATH,
@@ -90,7 +81,6 @@ class Transport implements TransportInterface
 
         $this->laminasTransport = new Sendmail($parameters);
         $this->message = $message;
-        $this->logger = $logger ?: ObjectManager::getInstance()->get(LoggerInterface::class);
     }
 
     /**
@@ -110,8 +100,7 @@ class Transport implements TransportInterface
 
             $this->laminasTransport->send($laminasMessage);
         } catch (\Exception $e) {
-            $this->logger->error($e);
-            throw new MailException(new Phrase('Unable to send mail. Please try again later.'));
+            throw new MailException(new Phrase($e->getMessage()), $e);
         }
     }
 

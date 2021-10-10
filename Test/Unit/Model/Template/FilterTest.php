@@ -38,6 +38,7 @@ use Magento\Store\Api\Data\StoreInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Variable\Model\Source\Variables;
 use Magento\Variable\Model\VariableFactory;
+use Pelago\Emogrifier;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -112,6 +113,11 @@ class FilterTest extends TestCase
      * @var Variables|MockObject
      */
     private $configVariables;
+
+    /**
+     * @var Emogrifier
+     */
+    private $emogrifier;
 
     /**
      * @var CssInliner
@@ -189,6 +195,8 @@ class FilterTest extends TestCase
             ->disableOriginalConstructor()
             ->getMockForAbstractClass();
 
+        $this->emogrifier = $this->objectManager->getObject(Emogrifier::class);
+
         $this->configVariables = $this->getMockBuilder(Variables::class)
             ->disableOriginalConstructor()
             ->getMock();
@@ -249,27 +257,18 @@ class FilterTest extends TestCase
                     $this->layoutFactory,
                     $this->appState,
                     $this->backendUrlBuilder,
+                    $this->emogrifier,
                     $this->configVariables,
+                    [],
+                    $this->cssInliner,
+                    $this->directiveProcessors,
                     $this->variableResolver,
                     $this->cssProcessor,
-                    $this->pubDirectory,
-                    $this->cssInliner,
-                    [],
-                    $this->directiveProcessors
+                    $this->pubDirectory
                 ]
             )
             ->setMethods($mockedMethods)
             ->getMock();
-    }
-
-    /**
-     * Test exception handling of filter method
-     */
-    public function testFilterExceptionHandler()
-    {
-        $filter = $this->getModel();
-        $filteredValue = $filter->filter(null);
-        $this->assertTrue(is_string($filteredValue));
     }
 
     /**
@@ -412,7 +411,7 @@ class FilterTest extends TestCase
     public function testConfigDirectiveAvailable()
     {
         $path = "web/unsecure/base_url";
-        $availableConfigs = ['value' => $path];
+        $availableConfigs = [['value' => $path]];
         $construction = ["{{config path={$path}}}", 'config', " path={$path}"];
         $scopeConfigValue = 'value';
 
@@ -424,7 +423,7 @@ class FilterTest extends TestCase
         $storeMock->expects($this->once())->method('getId')->willReturn(1);
 
         $this->configVariables->expects($this->once())
-            ->method('getAvailableVars')
+            ->method('getData')
             ->willReturn($availableConfigs);
         $this->scopeConfig->expects($this->once())
             ->method('getValue')
@@ -447,7 +446,7 @@ class FilterTest extends TestCase
         $storeMock->expects($this->once())->method('getId')->willReturn(1);
 
         $this->configVariables->expects($this->once())
-            ->method('getAvailableVars')
+            ->method('getData')
             ->willReturn($availableConfigs);
         $this->scopeConfig->expects($this->never())
             ->method('getValue')
