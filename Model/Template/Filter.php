@@ -8,6 +8,7 @@ namespace Magento\Email\Model\Template;
 use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Filesystem;
 use Magento\Framework\Filesystem\Directory\ReadInterface;
+use Magento\Framework\Filter\VariableResolverInterface;
 use Magento\Framework\View\Asset\ContentProcessorException;
 use Magento\Framework\View\Asset\ContentProcessorInterface;
 
@@ -50,6 +51,7 @@ class Filter extends \Magento\Framework\Filter\Template
      * Modifier Callbacks
      *
      * @var array
+     * @deprecated 101.0.4 Use the new Directive Processor interfaces
      */
     protected $_modifiers = ['nl2br' => ''];
 
@@ -191,6 +193,8 @@ class Filter extends \Magento\Framework\Filter\Template
      * @param array $variables
      * @param \Magento\Framework\Css\PreProcessor\Adapter\CssInliner|null $cssInliner
      *
+     * @param array $directiveProcessors
+     * @param VariableResolverInterface|null $variableResolver
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function __construct(
@@ -208,7 +212,9 @@ class Filter extends \Magento\Framework\Filter\Template
         \Pelago\Emogrifier $emogrifier,
         \Magento\Variable\Model\Source\Variables $configVariables,
         $variables = [],
-        \Magento\Framework\Css\PreProcessor\Adapter\CssInliner $cssInliner = null
+        \Magento\Framework\Css\PreProcessor\Adapter\CssInliner $cssInliner = null,
+        array $directiveProcessors = [],
+        VariableResolverInterface $variableResolver = null
     ) {
         $this->_escaper = $escaper;
         $this->_assetRepo = $assetRepo;
@@ -225,7 +231,7 @@ class Filter extends \Magento\Framework\Filter\Template
         $this->cssInliner = $cssInliner ?: \Magento\Framework\App\ObjectManager::getInstance()
             ->get(\Magento\Framework\Css\PreProcessor\Adapter\CssInliner::class);
         $this->configVariables = $configVariables;
-        parent::__construct($string, $variables);
+        parent::__construct($string, $variables, $directiveProcessors, $variableResolver);
     }
 
     /**
@@ -321,7 +327,7 @@ class Filter extends \Magento\Framework\Filter\Template
     }
 
     /**
-     * Get Css processor
+     * Get CSS processor
      *
      * @deprecated 100.1.2
      * @return Css\Processor
@@ -520,6 +526,7 @@ class Filter extends \Magento\Framework\Filter\Template
      */
     public function mediaDirective($construction)
     {
+        // phpcs:disable Magento2.Functions.DiscouragedFunction
         $params = $this->getParameters(html_entity_decode($construction[2], ENT_QUOTES));
         return $this->_storeManager->getStore()
             ->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_MEDIA) . $params['url'];
@@ -612,7 +619,7 @@ class Filter extends \Magento\Framework\Filter\Template
         if (preg_match(self::TRANS_DIRECTIVE_REGEX, $value, $matches) !== 1) {
             return ['', []];  // malformed directive body; return without breaking list
         }
-
+        // phpcs:disable Magento2.Functions.DiscouragedFunction
         $text = stripslashes($matches[2]);
 
         $params = [];
@@ -638,7 +645,10 @@ class Filter extends \Magento\Framework\Filter\Template
             return $construction[0];
         }
 
-        list($directive, $modifiers) = $this->explodeModifiers($construction[2], 'escape');
+        list($directive, $modifiers) = $this->explodeModifiers(
+            $construction[2] . ($construction['filters'] ?? ''),
+            'escape'
+        );
         return $this->applyModifiers($this->getVariable($directive, ''), $modifiers);
     }
 
@@ -655,6 +665,7 @@ class Filter extends \Magento\Framework\Filter\Template
      * @param string $value
      * @param string $default assumed modifier if none present
      * @return array
+     * @deprecated 101.0.4 Use the new FilterApplier or Directive Processor interfaces
      */
     protected function explodeModifiers($value, $default = null)
     {
@@ -673,6 +684,7 @@ class Filter extends \Magento\Framework\Filter\Template
      * @param string $value
      * @param string $modifiers
      * @return string
+     * @deprecated 101.0.4 Use the new FilterApplier or Directive Processor interfaces
      */
     protected function applyModifiers($value, $modifiers)
     {
@@ -688,7 +700,7 @@ class Filter extends \Magento\Framework\Filter\Template
                     $callback = $modifier;
                 }
                 array_unshift($params, $value);
-                $value = call_user_func_array($callback, $params);
+                $value = $callback(...$params);
             }
         }
         return $value;
@@ -700,12 +712,13 @@ class Filter extends \Magento\Framework\Filter\Template
      * @param string $value
      * @param string $type
      * @return string
+     * @deprecated 101.0.4 Use the new FilterApplier or Directive Processor interfaces
      */
     public function modifierEscape($value, $type = 'html')
     {
         switch ($type) {
             case 'html':
-                return htmlspecialchars($value, ENT_QUOTES);
+                return $this->_escaper->escapeHtml($value);
 
             case 'htmlentities':
                 return htmlentities($value, ENT_QUOTES);
@@ -963,7 +976,7 @@ class Filter extends \Magento\Framework\Filter\Template
     }
 
     /**
-     * Apply inline css
+     * Apply Inline CSS
      *
      * Merge HTML and CSS and return HTML that has CSS styles applied "inline" to the HTML tags. This is necessary
      * in order to support all email clients.
